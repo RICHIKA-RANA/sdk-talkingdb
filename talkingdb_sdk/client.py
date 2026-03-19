@@ -80,15 +80,14 @@ class TalkingDBClient:
         url = f"{self.host}/extract"
         nodes = []
 
-        for graph_id in graph_ids:
-            payload = {
-                "graph_id": graph_id,
-                "text": query,
-            }
-            if metadata is not None:
-                payload["metadata"] = metadata
+        payload = {
+            "graph_ids": graph_ids,
+            "text": query,
+        }
+        if metadata is not None:
+            payload["metadata"] = metadata
 
-            res = self._post(url, payload)
-            nodes.extend(res.json().get("elements", []))
+        res = self._post(url, payload)
+        nodes.extend(res.json().get("elements", []))
 
         return nodes
