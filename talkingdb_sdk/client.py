@@ -1,5 +1,5 @@
 import threading
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import requests
 from requests.exceptions import RequestException
@@ -28,17 +28,20 @@ def _is_retryable_exception(exc: Exception) -> bool:
 
 
 class TalkingDBClient:
-    def __init__(self, host: str, timeout: float = 30.0):
+    def __init__(self, host: str, timeout: float = 30.0, headers: Optional[Dict[str, str]] = None,):
         self.host = host.rstrip("/")
         self.timeout = timeout
+        self.default_headers = {
+            "Content-Type": "application/json",
+        }
+        if headers:
+            self.default_headers.update(headers)
         self._local = threading.local()
 
     def _get_session(self) -> requests.Session:
         if not hasattr(self._local, "session"):
             session = requests.Session()
-            session.headers.update({
-                "Content-Type": "application/json",
-            })
+            session.headers.update(self.default_headers)
             self._local.session = session
         return self._local.session
 
@@ -75,14 +78,16 @@ class TalkingDBClient:
         self,
         graph_ids: List[str],
         query: str,
+        max_results: int = 20,
         metadata: dict | None = None,
     ) -> list:
-        url = f"{self.host}/extract"
+        url = f"{self.host}/v1/queries"
         nodes = []
 
         payload = {
             "graph_ids": graph_ids,
             "text": query,
+            "max_results": max_results,
         }
         if metadata is not None:
             payload["metadata"] = metadata
