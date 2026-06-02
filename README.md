@@ -5,6 +5,7 @@ Python SDK for TalkingDB
 ## Code Contributor
 
 mayank.g@smarter.codes
+richika.r@smarter.codes
 
 ## License
 
