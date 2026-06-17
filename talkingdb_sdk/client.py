@@ -215,10 +215,15 @@ class TalkingDBClient:
 
     # --------------------------------------------------- document management
     def list_documents(
-        self, session_id: Optional[str] = None
+        self,
+        session_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> List[JobStatus]:
         url = f"{self.host}/v1/documents"
-        params = {"session_id": session_id} if session_id else None
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if session_id:
+            params["session_id"] = session_id
         res = self._request(
             "GET", url, params=params,
             retry_attempts=3, retry_max_wait=5.0, timeout=5.0,
