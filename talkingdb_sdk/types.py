@@ -48,6 +48,7 @@ class JobAccepted:
     job_id: str
     job_type: JobType
     state: JobState
+    session_id: Optional[str] = None
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "JobAccepted":
@@ -55,6 +56,7 @@ class JobAccepted:
             job_id=payload["job_id"],
             job_type=JobType(payload["job_type"]),
             state=JobState(payload["state"]),
+            session_id=payload.get("session_id"),
         )
 
 
@@ -72,6 +74,7 @@ class JobStatus:
     result_summary: Optional[Dict[str, Any]]
     error_code: Optional[JobErrorCode]
     error_message: Optional[str]
+    session_id: Optional[str] = None
 
     def is_terminal(self) -> bool:
         return self.state.is_terminal()
@@ -83,7 +86,7 @@ class JobStatus:
             job_type=JobType(payload["job_type"]),
             state=JobState(payload["state"]),
             stage=JobStage(payload["stage"]) if payload.get("stage") else None,
-            percent=payload.get("percent"),
+            percent=payload.get("progress", payload.get("percent")),
             status_message=payload.get("status_message"),
             result_graph_id=payload.get("result_graph_id"),
             result_summary=payload.get("result_summary"),
@@ -93,4 +96,5 @@ class JobStatus:
                 else None
             ),
             error_message=payload.get("error_message"),
+            session_id=payload.get("session_id"),
         )
