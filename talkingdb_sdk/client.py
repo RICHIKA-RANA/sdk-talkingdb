@@ -124,6 +124,7 @@ class TalkingDBClient:
         json: Optional[dict] = None,
         files: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
         timeout: Optional[float] = None,
     ) -> requests.Response:
         res = self._get_session().request(
@@ -132,6 +133,7 @@ class TalkingDBClient:
             json=json,
             files=files,
             data=data,
+            params=params,
             timeout=timeout if timeout is not None else self.timeout,
         )
         res.raise_for_status()
@@ -145,6 +147,7 @@ class TalkingDBClient:
         json: Optional[dict] = None,
         files: Optional[Dict[str, Any]] = None,
         data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
         timeout: Optional[float] = None,
         retry_attempts: int = 5,
         retry_max_wait: float = 10.0,
@@ -164,6 +167,7 @@ class TalkingDBClient:
                 json=json,
                 files=files,
                 data=data,
+                params=params,
                 timeout=timeout,
             )
         except requests.HTTPError as exc:
@@ -209,12 +213,35 @@ class TalkingDBClient:
         res = self._post(url, payload)
         return res.json().get("elements", [])
 
+    # --------------------------------------------------- document management
+    def list_documents(
+        self,
+        session_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[JobStatus]:
+        url = f"{self.host}/v1/documents"
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if session_id:
+            params["session_id"] = session_id
+        res = self._request(
+            "GET", url, params=params,
+            retry_attempts=3, retry_max_wait=5.0, timeout=5.0,
+        )
+        return [JobStatus.from_dict(item) for item in res.json()]
+
+    def remove_document(self, job_id: str) -> JobStatus:
+        url = f"{self.host}/v1/documents/{job_id}"
+        res = self._request("DELETE", url)
+        return JobStatus.from_dict(res.json())
+
     # ------------------------------------------------------- async ingest
     def submit_document(
         self,
         file: FilePathOrHandle,
         metadata: Optional[dict] = None,
         filename: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> JobAccepted:
         url = f"{self.host}/v1/documents"
 
@@ -227,13 +254,15 @@ class TalkingDBClient:
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 ),
             }
-            form: Optional[Dict[str, Any]] = None
+            form: Dict[str, Any] = {}
             if metadata is not None:
                 import json as _json
-                form = {"metadata": _json.dumps(metadata)}
+                form["metadata"] = _json.dumps(metadata)
+            if session_id is not None:
+                form["session_id"] = session_id
 
             res = self._request(
-                "POST", url, files=multipart, data=form, timeout=self.timeout
+                "POST", url, files=multipart, data=form or None, timeout=self.timeout
             )
         finally:
             if opened_here:
@@ -279,12 +308,13 @@ class TalkingDBClient:
         file: FilePathOrHandle,
         metadata: Optional[dict] = None,
         filename: Optional[str] = None,
+        session_id: Optional[str] = None,
         *,
         poll_interval: float = 1.0,
         timeout: Optional[float] = None,
         on_progress: Optional[Callable[[JobStatus], None]] = None,
     ) -> JobStatus:
-        accepted = self.submit_document(file, metadata, filename)
+        accepted = self.submit_document(file, metadata, filename, session_id)
         terminal = self.wait_for_terminal(
             accepted.job_id,
             poll_interval=poll_interval,
