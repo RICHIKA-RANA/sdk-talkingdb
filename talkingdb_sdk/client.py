@@ -24,10 +24,25 @@ from .exceptions import (
     ValidationError,
     FileTooLargeError,
 )
-from .types import JobAccepted, JobState, JobStatus
+from .types import (
+    JobAccepted,
+    JobState,
+    JobStatus,
+    Namespace,
+    NamespaceDocument,
+)
 
 
 FilePathOrHandle = Union[str, Path, BinaryIO]
+
+_CONTENT_TYPES = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".pdf": "application/pdf",
+}
+
+
+def _content_type_for(filename: str) -> str:
+    return _CONTENT_TYPES.get(Path(filename).suffix.lower(), "application/octet-stream")
 
 
 def _is_retryable_exception(exc: Exception) -> bool:
@@ -235,6 +250,54 @@ class TalkingDBClient:
         res = self._request("DELETE", url)
         return JobStatus.from_dict(res.json())
 
+    # --------------------------------------------------------------- namespaces
+    def list_namespaces(self) -> List[Namespace]:
+        url = f"{self.host}/v1/namespaces"
+        res = self._request(
+            "GET", url, retry_attempts=3, retry_max_wait=5.0, timeout=5.0
+        )
+        return [Namespace.from_dict(item) for item in res.json()]
+
+    def list_namespace_documents(
+        self,
+        namespace: str,
+        limit: int = 50,
+        offset: int = 0,
+        completed_only: bool = False,
+    ) -> List[NamespaceDocument]:
+        url = f"{self.host}/v1/namespaces/{namespace}/documents"
+        params: Dict[str, Any] = {
+            "limit": limit,
+            "offset": offset,
+            "completed_only": completed_only,
+        }
+        res = self._request(
+            "GET", url, params=params,
+            retry_attempts=3, retry_max_wait=5.0, timeout=5.0,
+        )
+        return [NamespaceDocument.from_dict(item) for item in res.json()]
+
+    def list_public_namespaces(self) -> List[Namespace]:
+        url = f"{self.host}/public/namespaces"
+        res = self._request(
+            "GET", url, retry_attempts=3, retry_max_wait=5.0, timeout=5.0
+        )
+        return [Namespace.from_dict(item) for item in res.json()]
+
+    def list_public_namespace_documents(
+        self,
+        namespace: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[NamespaceDocument]:
+        url = f"{self.host}/public/namespaces/{namespace}/documents"
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        res = self._request(
+            "GET", url, params=params,
+            retry_attempts=3, retry_max_wait=5.0, timeout=5.0,
+        )
+        return [NamespaceDocument.from_dict(item) for item in res.json()]
+
     # ------------------------------------------------------- async ingest
     def submit_document(
         self,
@@ -242,17 +305,18 @@ class TalkingDBClient:
         metadata: Optional[dict] = None,
         filename: Optional[str] = None,
         session_id: Optional[str] = None,
+        *,
+        namespace: Optional[str] = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        suggested_queries: Optional[List[str]] = None,
     ) -> JobAccepted:
         url = f"{self.host}/v1/documents"
 
         handle, resolved_name, opened_here = _open_file(file, filename)
         try:
             multipart: Dict[str, Any] = {
-                "file": (
-                    resolved_name,
-                    handle,
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ),
+                "file": (resolved_name, handle, _content_type_for(resolved_name)),
             }
             form: Dict[str, Any] = {}
             if metadata is not None:
@@ -260,6 +324,14 @@ class TalkingDBClient:
                 form["metadata"] = _json.dumps(metadata)
             if session_id is not None:
                 form["session_id"] = session_id
+            if namespace is not None:
+                form["namespace"] = namespace
+            if title is not None:
+                form["title"] = title
+            if description is not None:
+                form["description"] = description
+            if suggested_queries:
+                form["suggested_queries"] = list(suggested_queries)
 
             res = self._request(
                 "POST", url, files=multipart, data=form or None, timeout=self.timeout
@@ -310,11 +382,24 @@ class TalkingDBClient:
         filename: Optional[str] = None,
         session_id: Optional[str] = None,
         *,
+        namespace: Optional[str] = None,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        suggested_queries: Optional[List[str]] = None,
         poll_interval: float = 1.0,
         timeout: Optional[float] = None,
         on_progress: Optional[Callable[[JobStatus], None]] = None,
     ) -> JobStatus:
-        accepted = self.submit_document(file, metadata, filename, session_id)
+        accepted = self.submit_document(
+            file,
+            metadata,
+            filename,
+            session_id,
+            namespace=namespace,
+            title=title,
+            description=description,
+            suggested_queries=suggested_queries,
+        )
         terminal = self.wait_for_terminal(
             accepted.job_id,
             poll_interval=poll_interval,

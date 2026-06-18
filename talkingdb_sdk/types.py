@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class JobType(str, Enum):
@@ -97,4 +97,44 @@ class JobStatus:
             ),
             error_message=payload.get("error_message"),
             session_id=payload.get("session_id"),
+        )
+
+
+@dataclass(frozen=True)
+class Namespace:
+    namespace: str
+    public_read: bool
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "Namespace":
+        return cls(
+            namespace=payload["namespace"],
+            public_read=bool(payload.get("public_read", False)),
+            title=payload.get("title"),
+            description=payload.get("description"),
+        )
+
+
+@dataclass(frozen=True)
+class NamespaceDocument:
+    id: str
+    state: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    suggested_queries: List[str] = field(default_factory=list)
+    result_graph_id: Optional[str] = None
+    namespace: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "NamespaceDocument":
+        return cls(
+            id=payload["id"],
+            state=payload.get("state", ""),
+            title=payload.get("title"),
+            description=payload.get("description"),
+            suggested_queries=list(payload.get("suggested_queries") or []),
+            result_graph_id=payload.get("result_graph_id"),
+            namespace=payload.get("namespace"),
         )
