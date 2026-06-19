@@ -18,6 +18,8 @@ from .types import (
     JobState,
     JobStatus,
     JobType,
+    Namespace,
+    NamespaceDocument,
 )
 
 __all__ = [
@@ -29,6 +31,8 @@ __all__ = [
     "JobState",
     "JobStatus",
     "JobType",
+    "Namespace",
+    "NamespaceDocument",
     # exceptions
     "FileTooLargeError",
     "HTTPError",

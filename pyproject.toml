@@ -1,6 +1,6 @@
 [project]
 name = "talkingdb-sdk"
-version = "2.1.0"
+version = "2.2.0"
 description = "Python SDK for TalkingDB"
 authors = [
     {name = "immkg",email = "mayank.g@smarter.codes"}
