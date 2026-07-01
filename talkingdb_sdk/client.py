@@ -414,6 +414,112 @@ class TalkingDBClient:
             )
         return terminal
 
+    # ------------------------------------------------ batch / parallel ingest
+    def submit_many(
+        self,
+        files: List[FilePathOrHandle],
+        *,
+        metadata: Optional[dict] = None,
+        session_id: Optional[str] = None,
+        namespace: Optional[str] = None,
+        retry_on_full: bool = True,
+        max_full_retries: int = 5,
+    ) -> List[JobAccepted]:
+        accepted: List[JobAccepted] = []
+        for file in files:
+            accepted.append(
+                self._submit_with_backoff(
+                    file,
+                    metadata=metadata,
+                    session_id=session_id,
+                    namespace=namespace,
+                    retry_on_full=retry_on_full,
+                    max_full_retries=max_full_retries,
+                )
+            )
+        return accepted
+
+    def _submit_with_backoff(
+        self,
+        file: FilePathOrHandle,
+        *,
+        metadata: Optional[dict],
+        session_id: Optional[str],
+        namespace: Optional[str],
+        retry_on_full: bool,
+        max_full_retries: int,
+    ) -> JobAccepted:
+        attempt = 0
+        while True:
+            try:
+                return self.submit_document(
+                    file, metadata, None, session_id, namespace=namespace
+                )
+            except QueueFullError as exc:
+                if not retry_on_full or attempt >= max_full_retries:
+                    raise
+                attempt += 1
+                time.sleep(exc.retry_after_seconds or 1)
+
+    def wait_for_all(
+        self,
+        job_ids: List[str],
+        *,
+        poll_interval: float = 1.0,
+        timeout: Optional[float] = None,
+        on_progress: Optional[Callable[[JobStatus], None]] = None,
+    ) -> List[JobStatus]:
+        """Poll until every job reaches a terminal state."""
+        started = time.monotonic()
+        results: Dict[str, JobStatus] = {}
+        pending = list(dict.fromkeys(job_ids))
+        while pending:
+            still_pending: List[str] = []
+            for job_id in pending:
+                status = self.get_job_status(job_id)
+                if on_progress is not None:
+                    on_progress(status)
+                if status.is_terminal():
+                    results[job_id] = status
+                else:
+                    still_pending.append(job_id)
+            pending = still_pending
+            if not pending:
+                break
+            if timeout is not None and time.monotonic() - started > timeout:
+                raise TimeoutError(
+                    f"{len(pending)} of {len(job_ids)} jobs did not terminate "
+                    f"within {timeout}s"
+                )
+            time.sleep(poll_interval)
+        return [results[job_id] for job_id in job_ids]
+
+    def ingest_many(
+        self,
+        files: List[FilePathOrHandle],
+        *,
+        metadata: Optional[dict] = None,
+        session_id: Optional[str] = None,
+        namespace: Optional[str] = None,
+        retry_on_full: bool = True,
+        poll_interval: float = 1.0,
+        timeout: Optional[float] = None,
+        on_progress: Optional[Callable[[JobStatus], None]] = None,
+    ) -> List[JobStatus]:
+        accepted = self.submit_many(
+            files,
+            metadata=metadata,
+            session_id=session_id,
+            namespace=namespace,
+            retry_on_full=retry_on_full,
+        )
+        return self.wait_for_all(
+            [a.job_id for a in accepted],
+            poll_interval=poll_interval,
+            timeout=timeout,
+            on_progress=on_progress,
+        )
+
 
 # --------------------------------------------------------- file helpers
 def _open_file(
