@@ -118,6 +118,27 @@ class Namespace:
 
 
 @dataclass(frozen=True)
+class Project:
+    project_id: str
+    name: str
+    document_count: int = 0
+    logo_url: Optional[str] = None
+    last_interaction_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any]) -> "Project":
+        return cls(
+            project_id=payload["project_id"],
+            name=payload["name"],
+            document_count=int(payload.get("document_count") or 0),
+            logo_url=payload.get("logo_url"),
+            last_interaction_at=payload.get("last_interaction_at"),
+            created_at=payload.get("created_at"),
+        )
+
+
+@dataclass(frozen=True)
 class NamespaceDocument:
     id: str
     state: str

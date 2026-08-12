@@ -30,6 +30,14 @@ class NotFoundError(HTTPError):
     """404 - unknown resource (e.g. unknown job_id)."""
 
 
+class ConflictError(HTTPError):
+    """409 - the request collides with existing state.
+
+    Today this is a duplicate project name on create or rename; the name is
+    compared case-insensitively per owner, so "Acme" and "ACME" collide.
+    """
+
+
 class FileTooLargeError(HTTPError):
     """413 - uploaded file exceeds the server's size cap."""
 

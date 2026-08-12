@@ -13,6 +13,7 @@ from tenacity import (
 )
 
 from .exceptions import (
+    ConflictError,
     HTTPError,
     JobFailedError,
     NotFoundError,
@@ -30,6 +31,7 @@ from .types import (
     JobStatus,
     Namespace,
     NamespaceDocument,
+    Project,
 )
 
 
@@ -86,6 +88,8 @@ def _to_typed_exception(http_err: requests.HTTPError) -> TalkingDBError:
         return UnauthorizedError(status, body, url)
     if status == 404:
         return NotFoundError(status, body, url)
+    if status == 409:
+        return ConflictError(status, body, url)
     if status == 413:
         return FileTooLargeError(status, body, url)
     if status == 415:
@@ -249,6 +253,41 @@ class TalkingDBClient:
         url = f"{self.host}/v1/documents/{job_id}"
         res = self._request("DELETE", url)
         return JobStatus.from_dict(res.json())
+
+    # ----------------------------------------------------------------- projects
+    def list_projects(self, limit: int = 10, offset: int = 0) -> List[Project]:
+        url = f"{self.host}/v1/projects"
+        res = self._request(
+            "GET", url, params={"limit": limit, "offset": offset},
+            retry_attempts=3, retry_max_wait=5.0, timeout=5.0,
+        )
+        return [Project.from_dict(item) for item in res.json()]
+
+    def rename_project(self, project_id: str, name: str) -> Project:
+        url = f"{self.host}/v1/projects/{project_id}"
+        res = self._request("PATCH", url, json={"name": name})
+        return Project.from_dict(res.json())
+
+    def list_project_documents(
+        self,
+        project_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[JobStatus]:
+        url = f"{self.host}/v1/projects/{project_id}/documents"
+        res = self._request(
+            "GET", url, params={"limit": limit, "offset": offset},
+            retry_attempts=3, retry_max_wait=5.0, timeout=5.0,
+        )
+        return [JobStatus.from_dict(item) for item in res.json()]
+
+    def add_document_to_project(self, project_id: str, job_id: str) -> None:
+        url = f"{self.host}/v1/projects/{project_id}/documents"
+        self._post(url, {"job_id": job_id})
+
+    def remove_document_from_project(self, project_id: str, job_id: str) -> None:
+        url = f"{self.host}/v1/projects/{project_id}/documents/{job_id}"
+        self._request("DELETE", url)
 
     # --------------------------------------------------------------- namespaces
     def list_namespaces(self) -> List[Namespace]:

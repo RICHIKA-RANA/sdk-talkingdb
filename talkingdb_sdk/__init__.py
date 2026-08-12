@@ -1,5 +1,6 @@
 from .client import TalkingDBClient
 from .exceptions import (
+    ConflictError,
     FileTooLargeError,
     HTTPError,
     JobFailedError,
@@ -20,6 +21,7 @@ from .types import (
     JobType,
     Namespace,
     NamespaceDocument,
+    Project,
 )
 
 __all__ = [
@@ -33,7 +35,9 @@ __all__ = [
     "JobType",
     "Namespace",
     "NamespaceDocument",
+    "Project",
     # exceptions
+    "ConflictError",
     "FileTooLargeError",
     "HTTPError",
     "JobFailedError",
