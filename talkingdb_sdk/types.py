@@ -75,6 +75,7 @@ class JobStatus:
     error_code: Optional[JobErrorCode]
     error_message: Optional[str]
     session_id: Optional[str] = None
+    page_count: Optional[int] = None
 
     def is_terminal(self) -> bool:
         return self.state.is_terminal()
@@ -97,6 +98,7 @@ class JobStatus:
             ),
             error_message=payload.get("error_message"),
             session_id=payload.get("session_id"),
+            page_count=payload.get("page_count"),
         )
 
 
